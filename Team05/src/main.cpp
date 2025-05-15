@@ -1,5 +1,6 @@
 #include <Adafruit_SH1106.h>
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <MFRC522.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -7,7 +8,7 @@
 #include <WebSocketsClient.h>
 #include <SocketIOclient.h>
 #include <HTTPClient.h>
-#include "config.h"
+#include "config.h.txt"
 
 /**
  * Poker Player RFID Terminal
@@ -50,6 +51,15 @@
  *
  *
  */
+
+// Function Declartions (prototypes)
+void connectToWiFi();
+void handleRFIDScan();
+void handleMenuNavigation();
+void handleConfirmButton();
+void updateMenuDisplay();
+void socketIOEvent(socketIOmessageType_t type, uint8_t *payload, size_t length);
+void handleSocketIOEvent(uint8_t *payload, size_t length);
 
 // Pin Definitions
 
@@ -108,154 +118,262 @@ void setup()
   pinMode(BUTTON_RETURN, INPUT_PULLUP);
 
   // Wifi connection
-  // connectToWifi();
+  // connectToWiFi();
 
   // SocketIO
-  // socketIO.begin(serverHost, serverPort); // Starts the websocket connection
-  // socketIO.onEvent(socketIOEvent);        // Hosts a event?
+  socketIO.begin(host, port);      // Starts the websocket connection
+  socketIO.onEvent(socketIOEvent); // Hosts a event?
+}
+void loop()
+{
+  socketIO.loop();
 
-  void loop()
+  if (!cardScanned)
   {
-    socketIO.loop();
+    handleRFIDScan();
+  }
+  else
+  {
+    handleMenuNavigation();
+  }
 
-    if (!cardScanned)
+  delay(50); // This ensures your button press is only accepted once every 50 milliseconds, smoothing out the bounces.
+}
+
+// Connect to the wifi (if there is connection)
+void connectToWiFi()
+{
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Connecting to WIFI...");
+  display.display();
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    display.print(".");
+    display.display();
+  }
+
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Wifi connected!");
+  display.print("IP: ");
+  display.print(WiFi.localIP());
+  display.display();
+  delay(2000);
+}
+
+// This function checks your card if present
+void handleRFIDScan()
+{
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Scan your card");
+  display.display();
+
+  // Look for new cards to scan
+  if (!mfrc522.PICC_IsNewCardPresent())
+  {
+    return;
+  }
+
+  // Select one of the cards
+  if (!mfrc522.PICC_ReadCardSerial())
+  {
+    return;
+  }
+
+  playerUID = "";
+  for (byte i = 0; i < mfrc522.uid.size; i++)
+  {
+    playerUID += String(mfrc522.uid.uidByte[i] < 0x10 ? "0" : "");
+    playerUID += String(mfrc522.uid.uidByte[i], HEX);
+  }
+
+  playerUID.toUpperCase();
+  cardScanned = true;
+
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Player: ");
+  display.print(playerUID);
+  display.println("Welcome! ");
+  display.display(); // show the content
+  delay(1000);       // Delay before displaying/clearing uid
+}
+
+void handleMenuNavigation()
+{
+  static unsigned long lastButtonPress = 0;
+
+  // This ensures your button press is only accepted once every 200 milliseconds, smoothing out the bounces.
+  if (millis() - lastButtonPress < 200)
+  {
+    return;
+  }
+
+  // current seletion is 0, our menu has 4 choices so to circle through the menu we have to insure that the value sits 0 - 3 3 as in last menu item.
+  if (digitalRead(BUTTON_UP) == LOW)
+  {
+    currentSelection = (currentSelection - 1 + 4) % 4;
+    lastButtonPress = millis();
+  }
+
+  if (digitalRead(BUTTON_DOWN) == LOW)
+  {
+    currentSelection = (currentSelection + 1) % 4;
+    lastButtonPress = millis();
+  }
+
+  if (digitalRead(BUTTON_CONFIRM) == LOW)
+  {
+    handleConfirmButton();
+    lastButtonPress = millis();
+  }
+
+  // pressing return cancels the bet and resets the value to 0.
+  // else player wants to back out, UID is cleared, and card scan is removed.
+  if (digitalRead(BUTTON_RETURN) == LOW)
+  {
+    if (betValue > 0)
     {
-      handleRIFDScan();
+      betValue = 0;
     }
     else
     {
-      handleMenuNavigation();
+      cardScanned = false;
+      playerUID = "";
     }
-    delay(50); // This ensures your button press is only accepted once every 50 milliseconds, smoothing out the bounces.
+    lastButtonPress = millis(); // Stores the current time to help with debouncing (avoiding multiple accidental presses).
+  }
+  updateMenuDisplay(); // relects the new state of the screen
+}
+
+// If current selection is bet then each press increases the value by 10 till 100 and resets back to 10
+// void handleConfirmButton()
+// {
+//   if (strcmp(menuItems[currentSelection], "Bet") == 0)
+//   {
+//     betValue += 10;
+//     if (betValue > 100)
+//     {
+//       betValue = 10;
+//     }
+//     return;
+//   }
+// }
+
+void handleConfirmButton()
+{
+  if (strcmp(menuItems[currentSelection], "Bet") == 0 && betValue == 0)
+  {
+    betValue = 10;
+    return;
   }
 
-  // Connect to the wifi (if there is connection)
-  void connectToWifi()
+  Serial.print("Player Action: ");
+  Serial.print(playerUID);
+  Serial.print(" - ");
+  Serial.print(menuItems[currentSelection]);
+  if (strcmp(menuItems[currentSelection], "Bet") == 0)
   {
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Connecting to WIFI...");
-    display.display();
+    Serial.print(" (Amount: ");
+    Serial.print(betValue);
+    Serial.print(")");
+  }
+  Serial.println();
 
-    Wifi.begin(ssid, password);
+  // Show confirmation on display
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Action logged:");
+  display.println(menuItems[currentSelection]);
+  if (strcmp(menuItems[currentSelection], "Bet") == 0)
+  {
+    display.print("Amount: ");
+    display.println(betValue);
+  }
+  display.display();
+  delay(1000);
 
-    while (Wifi.status() != WL_CONNECTED)
+  betValue = 0;
+}
+
+void updateMenuDisplay()
+{
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println(playerUID);
+  display.println("------------");
+
+  for (int i = 0; i < 4; i++)
+  {
+    if (i == currentSelection)
     {
-      delay(500);
-      display.print(".");
-      display.display();
+      display.print("> ");
+    }
+    else
+    {
+      display.print(" ");
     }
 
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Wifi connected!");
-    display.print("IP: ");
-    display.printl, (WiFi.localIP());
-    display.display();
-    delay(2000);
+    display.print(menuItems[i]);
+    if (strcmp(menuItems[i], "Bet") == 0 && betValue > 0)
+    {
+      display.print(": ");
+      display.print(betValue);
+    }
+    display.println();
+  }
+  display.display();
+}
+
+void socketIOEvent(socketIOmessageType_t type, uint8_t *payload, size_t length)
+{
+  switch (type)
+  {
+  case sIOtype_DISCONNECT:
+    Serial.println("[IOc] Disconnected");
+    break;
+  case sIOtype_CONNECT:
+    Serial.println("[Ioc] Connected");
+    socketIO.send(sIOtype_CONNECT, "/");
+    break;
+  case sIOtype_EVENT:
+    handleSocketIOEvent(payload, length);
+    break;
+  case sIOtype_ACK:
+  case sIOtype_ERROR:
+  case sIOtype_BINARY_ACK:
+  case sIOtype_BINARY_EVENT:
+    break;
+  }
+}
+
+void handleSocketIOEvent(uint8_t *payload, size_t length)
+{
+  char *sptr = NULL;
+  int id = strtol((char *)payload, &sptr, 10);
+
+  DynamicJsonDocument doc(1024);
+  DeserializationError error = deserializeJson(doc, sptr, length - (sptr - (char *)payload));
+
+  if (error)
+  {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.c_str());
+    return;
   }
 
-  // This function checks your card if present
-  void handleRIFDScan()
+  String eventName = doc[0];
+
+  if (eventName == "game_update")
   {
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Scan your card");
-    display.display();
-
-    // Look for new cards to scan
-    if (!mfrc522.PICC_IsNewCardPresent())
-    {
-      return;
-    }
-
-    // Select one of the cards
-    if (!mfrc522.PICC_ReadCardSerial())
-    {
-      return;
-    }
-
-    playerUID = "";
-    for (byte i = 0; i < mfrc522.uid.size; i++)
-    {
-      playerUID += String(mfrc522.uid.uidByte[i] < 0x10 ? "0" : "");
-      playerUID += String(mfrc522.uid.uidByte[i], HEX);
-    }
-
-    playerUID.toUpperCase();
-    cardScanned = true;
-
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Player: ");
-    display.print(playerUID);
-    display.println("Welcome! ");
-    display.display(); // show the content
-    delay(1000);       // Delay before displaying/clearing uid
-  }
-
-  void handleMenuNavigation()
-  {
-    static unsigned long lastButtonPress = 0;
-
-    // This ensures your button press is only accepted once every 200 milliseconds, smoothing out the bounces.
-    if (millis() - lastButtonPress < 200)
-    {
-      return;
-    }
-
-    // current seletion is 0, our menu has 4 choices so to circle through the menu we have to insure that the value sits 0 - 3 3 as in last menu item.
-    if (digitalRead(BUTTON_UP) == LOW)
-    {
-      currentSelection = (currentSelection - 1 + 4) % 4;
-      lastButtonPress = millis();
-    }
-
-    if (digitalRead(BUTTON_DOWN) == LOW)
-    {
-      currentSelection = (currentSelection + 1) % 4;
-      lastButtonPress = millis();
-    }
-
-    if (digitalRead(BUTTON_CONFIRM) == LOW)
-    {
-      handleConfirmButton();
-      lastButtonPress = millis();
-    }
-
-    // pressing return cancels the bet and resets the value to 0.
-    // else player wants to back out, UID is cleared, and card scan is removed.
-    if (digitalRead(BUTTON_RETURN) == LOW)
-    {
-      if (betValue > 0)
-      {
-        betValue = 0;
-      }
-      else
-      {
-        cardScanned = false;
-        playerUID = "";
-      }
-      lastButtonPress = millis(); // Stores the current time to help with debouncing (avoiding multiple accidental presses).
-    }
-    updateMenuDisplay(); // relects the new state of the screen
-  }
-
-  // If current selection is bet then each press increases the value by 10 till 100 and resets back to 10
-  void handleConfirmButton()
-  {
-    if (strcmp(menuItems[currentSelection], "Bet") == 0)
-    {
-      betValue += 10;
-      if (betValue > 100)
-      {
-        betValue = 10;
-      }
-      return;
-    }
-  }
-
-  void updateMenuDisplay()
-  {
+    // Handle game state updates from server
+    JsonObject data = doc[1];
+    // Process game update here
   }
 }
