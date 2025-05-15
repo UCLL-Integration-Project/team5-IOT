@@ -37,6 +37,18 @@
  * ---------------------------------------------
  * SCL         SCL(Serial Clock)        22
  * SDA         SDA(Serial Data)         21
+ *
+ *
+ *                  Joystick (5V to 3V)      ESP32
+ * Signal           Pin                      Pin
+ * -------------------------------------------------
+ * VCC              + 5V                     3.3V +
+ * GND              GND                      GND -
+ * VRx(horizontal)  VRx                      34
+ * VRy(vertical)    VRy                      35
+ * SW(Switch)       SW                       32
+ *
+ *
  */
 
 // Pin Definitions
@@ -114,10 +126,10 @@ void setup()
     {
       handleMenuNavigation();
     }
-
-    delay(50); // Delay to derail buttons
+    delay(50); // This ensures your button press is only accepted once every 50 milliseconds, smoothing out the bounces.
   }
 
+  // Connect to the wifi (if there is connection)
   void connectToWifi()
   {
     display.clearDisplay();
@@ -125,10 +137,125 @@ void setup()
     display.println("Connecting to WIFI...");
     display.display();
 
-    // Wifi.begin(ssid, password);
+    Wifi.begin(ssid, password);
 
     while (Wifi.status() != WL_CONNECTED)
     {
+      delay(500);
+      display.print(".");
+      display.display();
     }
+
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Wifi connected!");
+    display.print("IP: ");
+    display.printl, (WiFi.localIP());
+    display.display();
+    delay(2000);
+  }
+
+  // This function checks your card if present
+  void handleRIFDScan()
+  {
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Scan your card");
+    display.display();
+
+    // Look for new cards to scan
+    if (!mfrc522.PICC_IsNewCardPresent())
+    {
+      return;
+    }
+
+    // Select one of the cards
+    if (!mfrc522.PICC_ReadCardSerial())
+    {
+      return;
+    }
+
+    playerUID = "";
+    for (byte i = 0; i < mfrc522.uid.size; i++)
+    {
+      playerUID += String(mfrc522.uid.uidByte[i] < 0x10 ? "0" : "");
+      playerUID += String(mfrc522.uid.uidByte[i], HEX);
+    }
+
+    playerUID.toUpperCase();
+    cardScanned = true;
+
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Player: ");
+    display.print(playerUID);
+    display.println("Welcome! ");
+    display.display(); // show the content
+    delay(1000);       // Delay before displaying/clearing uid
+  }
+
+  void handleMenuNavigation()
+  {
+    static unsigned long lastButtonPress = 0;
+
+    // This ensures your button press is only accepted once every 200 milliseconds, smoothing out the bounces.
+    if (millis() - lastButtonPress < 200)
+    {
+      return;
+    }
+
+    // current seletion is 0, our menu has 4 choices so to circle through the menu we have to insure that the value sits 0 - 3 3 as in last menu item.
+    if (digitalRead(BUTTON_UP) == LOW)
+    {
+      currentSelection = (currentSelection - 1 + 4) % 4;
+      lastButtonPress = millis();
+    }
+
+    if (digitalRead(BUTTON_DOWN) == LOW)
+    {
+      currentSelection = (currentSelection + 1) % 4;
+      lastButtonPress = millis();
+    }
+
+    if (digitalRead(BUTTON_CONFIRM) == LOW)
+    {
+      handleConfirmButton();
+      lastButtonPress = millis();
+    }
+
+    // pressing return cancels the bet and resets the value to 0.
+    // else player wants to back out, UID is cleared, and card scan is removed.
+    if (digitalRead(BUTTON_RETURN) == LOW)
+    {
+      if (betValue > 0)
+      {
+        betValue = 0;
+      }
+      else
+      {
+        cardScanned = false;
+        playerUID = "";
+      }
+      lastButtonPress = millis(); // Stores the current time to help with debouncing (avoiding multiple accidental presses).
+    }
+    updateMenuDisplay(); // relects the new state of the screen
+  }
+
+  // If current selection is bet then each press increases the value by 10 till 100 and resets back to 10
+  void handleConfirmButton()
+  {
+    if (strcmp(menuItems[currentSelection], "Bet") == 0)
+    {
+      betValue += 10;
+      if (betValue > 100)
+      {
+        betValue = 10;
+      }
+      return;
+    }
+  }
+
+  void updateMenuDisplay()
+  {
   }
 }
