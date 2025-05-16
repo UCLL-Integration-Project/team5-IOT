@@ -52,7 +52,19 @@
  *
  */
 
+struct Player
+{
+  const char *uid;
+  const char *name;
+};
+
+Player players[] = {
+    {"DB F7 1A E3", "Rijensh"}};
+
+const int playerCount = sizeof(players) / sizeof(Player);
+
 // Function Declartions (prototypes)
+String getPlayerName(String uid);
 void connectToWiFi();
 void handleRFIDScan();
 void handleMenuNavigation();
@@ -84,10 +96,9 @@ WiFiClient Wificlient;
 SocketIOclient socketIO;
 HTTPClient http;
 
-char messageBuffer[256];
-
 // Game fucntion
 String playerUID = ""; // Variable to store the UID of the player;
+String playerName = "";
 int currentSelection = 0;
 const char *menuItems[] = {"Check", "Call", "Bet", "Fold"};
 int betValue = 0;
@@ -113,12 +124,12 @@ void setup()
 
   // Buttons Config
   pinMode(BUTTON_UP, INPUT_PULLUP);
-  pinMode(BUTTON_DOWN, INPUT_PULLDOWN);
+  pinMode(BUTTON_DOWN, INPUT_PULLUP);
   pinMode(BUTTON_CONFIRM, INPUT_PULLUP);
   pinMode(BUTTON_RETURN, INPUT_PULLUP);
 
   // Wifi connection
-  // connectToWiFi();
+  connectToWiFi();
 
   // SocketIO
   socketIO.begin(host, port);      // Starts the websocket connection
@@ -138,6 +149,18 @@ void loop()
   }
 
   delay(50); // This ensures your button press is only accepted once every 50 milliseconds, smoothing out the bounces.
+}
+
+String getPlayerName(String uid)
+{
+  for (int i = 0; i < playerCount; i++)
+  {
+    if (uid.equalsIgnoreCase(players[i].uid))
+    {
+      return players[i].name;
+    }
+  }
+  return "Guest";
 }
 
 // Connect to the wifi (if there is connection)
@@ -175,13 +198,7 @@ void handleRFIDScan()
   display.display();
 
   // Look for new cards to scan
-  if (!mfrc522.PICC_IsNewCardPresent())
-  {
-    return;
-  }
-
-  // Select one of the cards
-  if (!mfrc522.PICC_ReadCardSerial())
+  if (!mfrc522.PICC_IsNewCardPresent() || !mfrc522.PICC_ReadCardSerial())
   {
     return;
   }
@@ -220,18 +237,21 @@ void handleMenuNavigation()
   {
     currentSelection = (currentSelection - 1 + 4) % 4;
     lastButtonPress = millis();
+    Serial.println("UP pressed");
   }
 
   if (digitalRead(BUTTON_DOWN) == LOW)
   {
     currentSelection = (currentSelection + 1) % 4;
     lastButtonPress = millis();
+    Serial.println("DOWN pressed");
   }
 
   if (digitalRead(BUTTON_CONFIRM) == LOW)
   {
     handleConfirmButton();
     lastButtonPress = millis();
+    Serial.println("CONFIRM pressed");
   }
 
   // pressing return cancels the bet and resets the value to 0.
@@ -248,6 +268,7 @@ void handleMenuNavigation()
       playerUID = "";
     }
     lastButtonPress = millis(); // Stores the current time to help with debouncing (avoiding multiple accidental presses).
+    Serial.println("RETURN pressed");
   }
   updateMenuDisplay(); // relects the new state of the screen
 }
@@ -274,9 +295,10 @@ void handleConfirmButton()
     return;
   }
 
-  Serial.print("Player Action: ");
+  Serial.print(playerName);
+  Serial.print(" (");
   Serial.print(playerUID);
-  Serial.print(" - ");
+  Serial.print(") selected: ");
   Serial.print(menuItems[currentSelection]);
   if (strcmp(menuItems[currentSelection], "Bet") == 0)
   {
@@ -289,7 +311,9 @@ void handleConfirmButton()
   // Show confirmation on display
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println("Action logged:");
+  display.println("Action confirmed:");
+  display.print(playerName);
+  display.print(" - ");
   display.println(menuItems[currentSelection]);
   if (strcmp(menuItems[currentSelection], "Bet") == 0)
   {
@@ -306,7 +330,7 @@ void updateMenuDisplay()
 {
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println(playerUID);
+  display.println(playerName);
   display.println("------------");
 
   for (int i = 0; i < 4; i++)
