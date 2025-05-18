@@ -52,17 +52,6 @@
  *
  */
 
-struct Player
-{
-  const char *uid;
-  const char *name;
-};
-
-Player players[] = {
-    {"DB F7 1A E3", "Rijensh"}};
-
-const int playerCount = sizeof(players) / sizeof(Player);
-
 // Function Declartions (prototypes)
 String getPlayerName(String uid);
 void connectToWiFi();
@@ -91,19 +80,29 @@ void handleSocketIOEvent(uint8_t *payload, size_t length);
 Adafruit_SH1106 display;
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 
-// Clients
+// Networking clients
 WiFiClient Wificlient;
 SocketIOclient socketIO;
+WebSocketsClient webSocket;
 HTTPClient http;
 
 // Game fucntion
 String playerUID = ""; // Variable to store the UID of the player;
-String playerName = "";
+String playerName = "Guest";
+int playerBalance = 0;
 int currentSelection = 0;
 const char *menuItems[] = {"Check", "Call", "Bet", "Fold"};
 int betValue = 0;
+int minBet = 10;
+int maxBet = 500;
+int potValue = 0;
+int potValue = 0;
 bool cardScanned = false;
-int pot = 0;
+bool isMyTurn = false;
+
+// Button
+unsigned long lastDebouceTime = 0; // millis retrun type
+const int debounceDelay = 50;
 
 void setup()
 {
@@ -115,7 +114,6 @@ void setup()
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(0, 0);
-  display.println("Aurora");
   display.display();
 
   // RFID Config
@@ -131,13 +129,14 @@ void setup()
   // Wifi connection
   connectToWiFi();
 
-  // SocketIO
-  socketIO.begin(host, port);      // Starts the websocket connection
-  socketIO.onEvent(socketIOEvent); // Hosts a event?
+  // websocket connection
+  webSocket.begin(host, port, path); // Starts the websocket connection
+  webSocket.onEvent(webSocketEvent); // Hosts a event?
+  webSocket.setReconnectInterval(5000);
 }
 void loop()
 {
-  socketIO.loop();
+  webSocket.loop();
 
   if (!cardScanned)
   {
@@ -147,20 +146,7 @@ void loop()
   {
     handleMenuNavigation();
   }
-
-  delay(50); // This ensures your button press is only accepted once every 50 milliseconds, smoothing out the bounces.
-}
-
-String getPlayerName(String uid)
-{
-  for (int i = 0; i < playerCount; i++)
-  {
-    if (uid.equalsIgnoreCase(players[i].uid))
-    {
-      return players[i].name;
-    }
-  }
-  return "Guest";
+  delay(10); // This ensures your button press is only accepted once every 50 milliseconds, smoothing out the bounces.
 }
 
 // Connect to the wifi (if there is connection)
@@ -203,23 +189,23 @@ void handleRFIDScan()
     return;
   }
 
+  // read player uid
   playerUID = "";
   for (byte i = 0; i < mfrc522.uid.size; i++)
   {
     playerUID += String(mfrc522.uid.uidByte[i] < 0x10 ? "0" : "");
     playerUID += String(mfrc522.uid.uidByte[i], HEX);
   }
-
   playerUID.toUpperCase();
+
+  sendPlayerData("player_scan", playerUID);
   cardScanned = true;
 
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println("Player: ");
-  display.print(playerUID);
-  display.println("Welcome! ");
+  display.println("Authenticating...");
   display.display(); // show the content
-  delay(1000);       // Delay before displaying/clearing uid
+  // delay(1000); // Delay before displaying/clearing uid
 }
 
 void handleMenuNavigation()
@@ -227,93 +213,79 @@ void handleMenuNavigation()
   static unsigned long lastButtonPress = 0;
 
   // This ensures your button press is only accepted once every 200 milliseconds, smoothing out the bounces.
-  if (millis() - lastButtonPress < 200)
-  {
+  if ((millis() - lastButtonPress) < lastDebouceTime)
     return;
-  }
 
   // current seletion is 0, our menu has 4 choices so to circle through the menu we have to insure that the value sits 0 - 3 3 as in last menu item.
-  if (digitalRead(BUTTON_UP) == LOW)
+  if (digitalRead(BUTTON_UP) == LOW && isMyTurn)
   {
-    currentSelection = (currentSelection - 1 + 4) % 4;
-    lastButtonPress = millis();
-    Serial.println("UP pressed");
+    if (strcmp(menuItems[currentSelection], "Bet") == 0)
+    {
+      betValue = min(maxBet, betValue + 10);
+    }
+    else
+    {
+      currentSelection = (currentSelection - 1 + 4) % 4;
+    }
+    lastDebouceTime = millis();
   }
-
-  if (digitalRead(BUTTON_DOWN) == LOW)
+  else if (digitalRead(BUTTON_DOWN) == LOW && isMyTurn)
   {
-    currentSelection = (currentSelection + 1) % 4;
-    lastButtonPress = millis();
-    Serial.println("DOWN pressed");
+    if (strcmp(menuItems[currentSelection], "Bet") == 0)
+    {
+      betValue = max(minBet, betValue - 10);
+    }
+    else
+    {
+      currentSelection = (currentSelection + 1) % 4;
+    }
+    lastDebouceTime = millis();
   }
-
-  if (digitalRead(BUTTON_CONFIRM) == LOW)
+  else if (digitalRead(BUTTON_CONFIRM) == LOW && isMyTurn)
   {
     handleConfirmButton();
-    lastButtonPress = millis();
-    Serial.println("CONFIRM pressed");
+    lastDebouceTime = millis();
   }
-
-  // pressing return cancels the bet and resets the value to 0.
-  // else player wants to back out, UID is cleared, and card scan is removed.
-  if (digitalRead(BUTTON_RETURN) == LOW)
+  else if (digitalRead(BUTTON_RETURN) == LOW)
   {
-    if (betValue > 0)
+    if (betValue > minBet)
     {
-      betValue = 0;
+      betValue = max(minBet, betValue - 10);
     }
     else
     {
       cardScanned = false;
       playerUID = "";
     }
-    lastButtonPress = millis(); // Stores the current time to help with debouncing (avoiding multiple accidental presses).
-    Serial.println("RETURN pressed");
+    lastDebouceTime = millis();
   }
   updateMenuDisplay(); // relects the new state of the screen
 }
 
-// If current selection is bet then each press increases the value by 10 till 100 and resets back to 10
-// void handleConfirmButton()
-// {
-//   if (strcmp(menuItems[currentSelection], "Bet") == 0)
-//   {
-//     betValue += 10;
-//     if (betValue > 100)
-//     {
-//       betValue = 10;
-//     }
-//     return;
-//   }
-// }
-
 void handleConfirmButton()
 {
-  if (strcmp(menuItems[currentSelection], "Bet") == 0 && betValue == 0)
+  if (strcmp(menuItems[currentSelection], "Bet") == 0 && betValue < minBet)
   {
-    betValue = 10;
+    betValue = minBet;
     return;
   }
 
-  Serial.print(playerName);
-  Serial.print(" (");
-  Serial.print(playerUID);
-  Serial.print(") selected: ");
-  Serial.print(menuItems[currentSelection]);
+  JsonDocument doc;
+  doc["uid"] = playerUID;
+  doc["action"] = menuItems[currentSelection];
+
   if (strcmp(menuItems[currentSelection], "Bet") == 0)
   {
-    Serial.print(" (Amount: ");
-    Serial.print(betValue);
-    Serial.print(")");
+    doc["amount"] = betValue;
   }
-  Serial.println();
 
-  // Show confirmation on display
+  String output;
+  serializeJson(doc, output);
+  webSocket.sendTXT(output);
+
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println("Action confirmed:");
-  display.print(playerName);
-  display.print(" - ");
+  display.println("Action sent:");
   display.println(menuItems[currentSelection]);
   if (strcmp(menuItems[currentSelection], "Bet") == 0)
   {
@@ -323,19 +295,26 @@ void handleConfirmButton()
   display.display();
   delay(1000);
 
-  betValue = 0;
+  isMyTurn = false;
+  betValue = minBet;
 }
 
 void updateMenuDisplay()
 {
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println(playerName);
-  display.println("------------");
+
+  display.print(playerName);
+  display.print(" ");
+  display.println(playerBalance);
+
+  display.print("pot :");
+  display.println(potValue);
+  display.println("-------------");
 
   for (int i = 0; i < 4; i++)
   {
-    if (i == currentSelection)
+    if (i == currentSelection && isMyTurn)
     {
       display.print("> ");
     }
@@ -345,59 +324,82 @@ void updateMenuDisplay()
     }
 
     display.print(menuItems[i]);
-    if (strcmp(menuItems[i], "Bet") == 0 && betValue > 0)
+    if (strcmp(menuItems[i], "Bet") == 0 && i == currentSelection)
     {
       display.print(": ");
       display.print(betValue);
     }
     display.println();
   }
+  display.println("-------------");
+  if (isMyTurn)
+  {
+    display.println("YOUR TURN");
+  }
+  else
+  {
+    display.println("Waiting...");
+  }
+
   display.display();
 }
 
-void socketIOEvent(socketIOmessageType_t type, uint8_t *payload, size_t length)
+void sendPlayerData(const char *event, String uid)
+{
+  JsonDocument doc;
+
+  doc["event"] = event;
+  doc["uid"] = event;
+
+  String output;
+  serializeJson(doc, output);
+  webSocket.sendTXT(output);
+}
+
+void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
 {
   switch (type)
   {
-  case sIOtype_DISCONNECT:
-    Serial.println("[IOc] Disconnected");
+  case WStype_CONNECTED:
+    Serial.println("Connected to server");
     break;
-  case sIOtype_CONNECT:
-    Serial.println("[Ioc] Connected");
-    socketIO.send(sIOtype_CONNECT, "/");
+  case WStype_DISCONNECTED:
+    Serial.println("Disconnected from server");
     break;
-  case sIOtype_EVENT:
-    handleSocketIOEvent(payload, length);
+  case WStype_TEXT:
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, payload);
+
+    String event = doc["event"];
+
+    if (event == "player_data")
+    {
+      playerName = doc["name"].as<String>();
+      playerBalance = doc["balance"];
+      potValue = doc["pot"];
+      isMyTurn = doc["your_turn"];
+
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.println("Welcome " + playerName);
+      display.print("Balance: ");
+      display.println(playerBalance);
+      display.display();
+      delay(1000);
+    }
+    else if (event == "game_update")
+    {
+      playerBalance = doc["balance"];
+      potValue = doc["pot"];
+      isMyTurn = doc["your_turn"];
+
+      String actionMessage = doc["message"].as<String>();
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.println(actionMessage);
+      display.display();
+      delay(1000);
+    }
     break;
-  case sIOtype_ACK:
-  case sIOtype_ERROR:
-  case sIOtype_BINARY_ACK:
-  case sIOtype_BINARY_EVENT:
-    break;
-  }
-}
-
-void handleSocketIOEvent(uint8_t *payload, size_t length)
-{
-  char *sptr = NULL;
-  int id = strtol((char *)payload, &sptr, 10);
-
-  DynamicJsonDocument doc(1024);
-  DeserializationError error = deserializeJson(doc, sptr, length - (sptr - (char *)payload));
-
-  if (error)
-  {
-    Serial.print(F("deserializeJson() failed: "));
-    Serial.println(error.c_str());
-    return;
-  }
-
-  String eventName = doc[0];
-
-  if (eventName == "game_update")
-  {
-    // Handle game state updates from server
-    JsonObject data = doc[1];
-    // Process game update here
   }
 }
