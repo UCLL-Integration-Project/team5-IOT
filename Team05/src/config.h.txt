@@ -1,5 +1,5 @@
 const char *ssid = "ucll-integratieproject";
 const char *password = "aesheiSei8uaMiag";
 const char *host = "https://team5-backend-itip-project5.apps.okd.ucll.cloud/";
-const char *path = "";
+const char *path = "wss://team5-backend-itip-project5.apps.okd.ucll.cloud";
 const uint16_t port = 31230;

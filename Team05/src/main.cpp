@@ -53,14 +53,16 @@
  */
 
 // Function Declartions (prototypes)
-String getPlayerName(String uid);
+// String getPlayerName(String uid);
 void connectToWiFi();
 void handleRFIDScan();
-void handleMenuNavigation();
 void handleConfirmButton();
 void updateMenuDisplay();
-void socketIOEvent(socketIOmessageType_t type, uint8_t *payload, size_t length);
-void handleSocketIOEvent(uint8_t *payload, size_t length);
+void handleWebSocketEvent(JsonDocument &doc);
+void webSocketEvent(WStype_t type, uint8_t *payload, size_t length);
+void displayGameStartMessage();
+void displayErrorMessage(const char *errormsg);
+void resetGameState();
 
 // Pin Definitions
 
@@ -90,18 +92,19 @@ HTTPClient http;
 String playerUID = ""; // Variable to store the UID of the player;
 String playerName = "Guest";
 int playerBalance = 0;
+int playersNeeded = 0;
 int currentSelection = 0;
 const char *menuItems[] = {"Check", "Call", "Bet", "Fold"};
 int betValue = 0;
 int minBet = 10;
 int maxBet = 500;
 int potValue = 0;
-int potValue = 0;
 bool cardScanned = false;
 bool isMyTurn = false;
+bool isRegisteringPlayers = true;
 
 // Button
-unsigned long lastDebouceTime = 0; // millis retrun type
+unsigned long lastDebounceTime = 0; // millis retrun type
 const int debounceDelay = 50;
 
 void setup()
@@ -144,7 +147,7 @@ void loop()
   }
   else
   {
-    handleMenuNavigation();
+    updateMenuDisplay();
   }
   delay(10); // This ensures your button press is only accepted once every 50 milliseconds, smoothing out the bounces.
 }
@@ -180,6 +183,7 @@ void handleRFIDScan()
 {
   display.clearDisplay();
   display.setCursor(0, 0);
+  display.setTextSize(1);
   display.println("Scan your card");
   display.display();
 
@@ -198,25 +202,39 @@ void handleRFIDScan()
   }
   playerUID.toUpperCase();
 
-  sendPlayerData("player_scan", playerUID);
-  cardScanned = true;
+  JsonDocument doc;
+  doc["event"] = "register_player";
+  doc["uid"] = playerUID;
+
+  if (playerName == "Guest")
+  {
+    doc["name"] = "Player_" + playerUID.substring(0, 4);
+  }
+  else
+  {
+    doc["name"] = playerName;
+  }
+
+  String output;
+  serializeJson(doc, output);
+  webSocket.sendTXT(output);
 
   display.clearDisplay();
+  display.setTextSize(1);
   display.setCursor(0, 0);
-  display.println("Authenticating...");
-  display.display(); // show the content
-  // delay(1000); // Delay before displaying/clearing uid
+  display.println("Registration sent");
+  display.print("UID: ");
+  display.println(playerUID);
+  display.display();
+  delay(1000);
 }
 
-void handleMenuNavigation()
+void handleButtonPresses()
 {
-  static unsigned long lastButtonPress = 0;
-
-  // This ensures your button press is only accepted once every 200 milliseconds, smoothing out the bounces.
-  if ((millis() - lastButtonPress) < lastDebouceTime)
+  unsigned long now = millis();
+  if (now - lastDebounceTime < debounceDelay)
     return;
 
-  // current seletion is 0, our menu has 4 choices so to circle through the menu we have to insure that the value sits 0 - 3 3 as in last menu item.
   if (digitalRead(BUTTON_UP) == LOW && isMyTurn)
   {
     if (strcmp(menuItems[currentSelection], "Bet") == 0)
@@ -227,7 +245,8 @@ void handleMenuNavigation()
     {
       currentSelection = (currentSelection - 1 + 4) % 4;
     }
-    lastDebouceTime = millis();
+    lastDebounceTime = now;
+    updateMenuDisplay();
   }
   else if (digitalRead(BUTTON_DOWN) == LOW && isMyTurn)
   {
@@ -239,16 +258,17 @@ void handleMenuNavigation()
     {
       currentSelection = (currentSelection + 1) % 4;
     }
-    lastDebouceTime = millis();
+    lastDebounceTime = now;
+    updateMenuDisplay();
   }
   else if (digitalRead(BUTTON_CONFIRM) == LOW && isMyTurn)
   {
-    handleConfirmButton();
-    lastDebouceTime = millis();
+    handleConfirmButton(); // Sends action to backend
+    lastDebounceTime = now;
   }
   else if (digitalRead(BUTTON_RETURN) == LOW)
   {
-    if (betValue > minBet)
+    if (strcmp(menuItems[currentSelection], "Bet") == 0 && betValue > minBet)
     {
       betValue = max(minBet, betValue - 10);
     }
@@ -257,9 +277,9 @@ void handleMenuNavigation()
       cardScanned = false;
       playerUID = "";
     }
-    lastDebouceTime = millis();
+    lastDebounceTime = now;
+    updateMenuDisplay();
   }
-  updateMenuDisplay(); // relects the new state of the screen
 }
 
 void handleConfirmButton()
@@ -302,58 +322,27 @@ void handleConfirmButton()
 void updateMenuDisplay()
 {
   display.clearDisplay();
+  display.setTextSize(2);
   display.setCursor(0, 0);
-
   display.print(playerName);
   display.print(" ");
   display.println(playerBalance);
 
+  display.setTextSize(3);
+  display.setCursor(display.width() / 2 - 30, display.height() / 2 - 10);
+  display.println(menuItems[currentSelection]);
+
+  display.setTextSize(1);
+  display.setCursor(0, display.height() - 10);
   display.print("pot :");
   display.println(potValue);
-  display.println("-------------");
 
-  for (int i = 0; i < 4; i++)
+  if (isMyTurn && !isRegisteringPlayers)
   {
-    if (i == currentSelection && isMyTurn)
-    {
-      display.print("> ");
-    }
-    else
-    {
-      display.print(" ");
-    }
-
-    display.print(menuItems[i]);
-    if (strcmp(menuItems[i], "Bet") == 0 && i == currentSelection)
-    {
-      display.print(": ");
-      display.print(betValue);
-    }
-    display.println();
+    display.setCursor(0, display.height() - 20);
+    display.print("UP/DOWN: Change CONFIRM: Select");
   }
-  display.println("-------------");
-  if (isMyTurn)
-  {
-    display.println("YOUR TURN");
-  }
-  else
-  {
-    display.println("Waiting...");
-  }
-
   display.display();
-}
-
-void sendPlayerData(const char *event, String uid)
-{
-  JsonDocument doc;
-
-  doc["event"] = event;
-  doc["uid"] = event;
-
-  String output;
-  serializeJson(doc, output);
-  webSocket.sendTXT(output);
 }
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
@@ -369,37 +358,105 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
   case WStype_TEXT:
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload);
-
-    String event = doc["event"];
-
-    if (event == "player_data")
+    if (error)
     {
-      playerName = doc["name"].as<String>();
-      playerBalance = doc["balance"];
-      potValue = doc["pot"];
-      isMyTurn = doc["your_turn"];
-
-      display.clearDisplay();
-      display.setCursor(0, 0);
-      display.println("Welcome " + playerName);
-      display.print("Balance: ");
-      display.println(playerBalance);
-      display.display();
-      delay(1000);
+      Serial.println("JSON deserialization failed!");
+      return;
     }
-    else if (event == "game_update")
-    {
-      playerBalance = doc["balance"];
-      potValue = doc["pot"];
-      isMyTurn = doc["your_turn"];
-
-      String actionMessage = doc["message"].as<String>();
-      display.clearDisplay();
-      display.setCursor(0, 0);
-      display.println(actionMessage);
-      display.display();
-      delay(1000);
-    }
+    handleWebSocketEvent(doc);
     break;
   }
+}
+
+void handleWebSocketEvent(JsonDocument &doc)
+{
+  const char *event = doc["event"];
+
+  if (strcmp(event, "game_update") == 0)
+  {
+    potValue = doc["pot"];
+    isMyTurn = (doc["current_player"].as<String>() == playerUID);
+
+    for (JsonObject player : doc["players"].as<JsonArray>())
+    {
+      if (player["uid"] == playerUID)
+      {
+        playerBalance = player["balance"];
+      }
+    }
+  }
+  else if (strcmp(event, "registration_ack") == 0)
+  {
+    playerName = doc["name"] | "Guest";
+    isRegisteringPlayers = doc["is_registering"] | true;
+    playersNeeded = doc["players_needed"] | 0;
+
+    Serial.println("Registered as: " + playerName);
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.println("Registered: " + playerName);
+    if (isRegisteringPlayers)
+    {
+      display.println("Waiting for players...");
+      display.println("Players needed: " + String(playersNeeded));
+    }
+    else
+    {
+      display.println("All players ready!");
+    }
+    display.display();
+  }
+  else if (strcmp(event, "game_start") == 0)
+  {
+    isRegisteringPlayers = false;
+    displayGameStartMessage();
+  }
+  else if (strcmp(event, "error") == 0)
+  {
+    const char *errorMsg = doc["message"] | "Unknown error";
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.println("ERROR:");
+    display.println(errorMsg);
+    display.display();
+    delay(2000);
+  }
+}
+
+void displayGameStartMessage()
+{
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.setTextSize(3);
+  display.println("Game Start!");
+  display.display();
+  delay(1000);
+}
+
+void displayErrorMessage(const char *errormsg)
+{
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.setTextSize(1);
+  display.println("Error:");
+  display.print(errormsg);
+  display.display();
+  delay(1500);
+}
+
+void resetGameState()
+{
+  cardScanned = false;
+  isMyTurn = false;
+  isRegisteringPlayers = true;
+  playerName = "Guest";
+  betValue = 0;
+  currentSelection = 0;
+  menuItems[0] = "Check";
+  menuItems[1] = "Bet";
+  menuItems[2] = "Call";
+  menuItems[3] = "Raise";
+  updateMenuDisplay();
 }
