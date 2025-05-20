@@ -56,6 +56,7 @@
 void connectToWiFi();
 void handleRFIDScan();
 void handleConfirmButton();
+void handleButtonPresses();
 void updateMenuDisplay();
 void handleWebSocketEvent(JsonDocument &doc);
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length);
