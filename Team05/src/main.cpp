@@ -52,8 +52,7 @@
  *
  */
 
-// Function Declartions (prototypes)
-// String getPlayerName(String uid);
+// Function Declartions
 void connectToWiFi();
 void handleRFIDScan();
 void handleConfirmButton();
@@ -141,15 +140,16 @@ void loop()
 {
   webSocket.loop();
 
-  if (!cardScanned)
+  if (cardScanned && !isRegisteringPlayers)
   {
-    handleRFIDScan();
+    handleButtonPresses();
+    updateMenuDisplay();
   }
   else
   {
-    updateMenuDisplay();
+    handleRFIDScan();
   }
-  delay(10); // This ensures your button press is only accepted once every 50 milliseconds, smoothing out the bounces.
+  delay(10);
 }
 
 // Connect to the wifi (if there is connection)
