@@ -74,26 +74,38 @@ void handleButtonPresses()
 
 void updateMenuDisplay()
 {
-    display.clear();
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
 
     if (actionTaken)
     {
-        display.drawString(0, 0, "Action sent.");
-        display.drawString(0, 12, "Wait for next round...");
+        display.setCursor(0, 0);
+        display.println("Action sent.");
+        display.setCursor(0, 12);
+        display.println("Wait for next round...");
     }
     else if (inAmountMenu)
     {
-        display.drawString(0, 0, menuItems[currentSelection]);
-        display.drawString(0, 12, "Amount: " + String(betValue));
-        display.drawString(0, 24, "Balance: " + String(playerBalance));
+        display.setCursor(0, 0);
+        display.println(menuItems[currentSelection]);
+        display.setCursor(0, 12);
+        display.print("Amount: ");
+        display.println(betValue);
+        display.setCursor(0, 24);
+        display.print("Balance: ");
+        display.println(playerBalance);
     }
     else
     {
         for (int i = 0; i < 5; i++)
         {
-            String line = (i == currentSelection ? "> " : "  ");
-            line += menuItems[i];
-            display.drawString(0, i * 12, line); // 12px line spacing
+            display.setCursor(0, i * 10);
+            if (i == currentSelection)
+                display.print("> ");
+            else
+                display.print("  ");
+            display.println(menuItems[i]);
         }
     }
 

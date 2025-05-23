@@ -2,22 +2,17 @@
 
 void setup()
 {
-
   Serial.begin(115200);
-
   initButtons();
   Serial.println("Buttons init done");
-
   initDisplay();
   Serial.println("Display init done.");
-
   initRFID();
   Serial.println("RFID init done.");
   connectToWiFi();
   Serial.println("WiFi connected!");
-
   initWebSocket();
-  Serial.println("WebSocket init done.");
+  Serial.println("Websockets initialized");
 }
 
 void loop()
@@ -37,30 +32,25 @@ void loop()
 
 void connectToWiFi()
 {
-  display.clear();
-  display.drawString(0, 0, "Connecting to WiFi...");
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Connecting to WIFI...");
   display.display();
 
   WiFi.begin(ssid, password);
-  int tries = 0;
-  while (WiFi.status() != WL_CONNECTED && tries++ < 20)
+
+  while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
-    display.drawString(0, 12, ".");
+    display.print(".");
     display.display();
   }
 
-  display.clear();
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    display.drawString(0, 0, "WiFi connected");
-    display.drawString(0, 12, WiFi.localIP().toString());
-  }
-  else
-  {
-    display.drawString(0, 0, "WiFi failed.");
-  }
-  display.clear();
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Wifi connected!");
+  display.print("IP: ");
+  display.print(WiFi.localIP());
   display.display();
-  delay(1500);
+  delay(2000);
 }

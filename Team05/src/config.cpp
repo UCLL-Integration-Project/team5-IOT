@@ -1,9 +1,9 @@
 #include "config.h"
 
-const char *ssid = "Orange-2f173";
-const char *password = "5U3PNNde";
+const char *ssid = "ucll-integratieproject";
+const char *password = "aesheiSei8uaMiag";
 const char *host = "team5-backend-itip-project5.apps.okd.ucll.cloud";
-const char *path = "/socket.io/?EIO=4&transport=websocket";
-const uint16_t port = 31230;
+const char *path = "/";
+const uint16_t port = 3000;
 
 bool actionTaken = false;
