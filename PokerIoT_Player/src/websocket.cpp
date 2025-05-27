@@ -3,7 +3,7 @@
 WebSocketsClient webSocket;
 extern String cardId;
 extern bool cardScanned;
-bool isRegisteringPlayers = true;
+extern bool actionTaken;
 extern int lastBet;
 extern int playerBalance;
 
@@ -11,8 +11,10 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
 {
     if (type != WStype_TEXT)
         return;
+
     Serial.print("[WS] Raw message: ");
     Serial.println((const char *)payload);
+
     StaticJsonDocument<512> doc;
     DeserializationError error = deserializeJson(doc, payload);
     if (error)
@@ -24,18 +26,6 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
         Serial.println("[ERROR] Missing 'event' in JSON payload.");
         serializeJson(doc, Serial); // Print full document
         return;
-    }
-
-    if (strcmp(eventType, "register_player_ack") == 0)
-    {
-        const char *username = doc["username"] | "Unknown";
-        showMessage("Registered:", username);
-    }
-    else if (strcmp(eventType, "registration_ack") == 0)
-    {
-        const char *name = doc["name"] | "Player";
-        isRegisteringPlayers = doc["is_registering"] | true;
-        showMessage("Registered:", name);
     }
     else if (strcmp(eventType, "game_add_player_ack") == 0)
     {

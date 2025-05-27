@@ -32,7 +32,7 @@ extern const uint16_t port;
 // Shared variables
 extern Adafruit_SH1106 display;
 extern WebSocketsClient webSocket;
-extern enum ActionState actionState;
+
 extern const char *menuItems[5];
 extern int currentSelection;
 extern bool inAmountMenu;
@@ -40,23 +40,22 @@ extern int betValue;
 extern const int minBet;
 extern const int betStep;
 extern const int minRaise;
+
 extern bool actionTaken;
 extern int lastBet;
 extern int playerBalance;
 extern bool cardScanned;
 extern String cardId;
-extern bool isRegisteringPlayers;
 
 // Function declarations
 void initButtons();
 void initDisplay();
 void showMessage(const String &line1, const String &line2);
 void initRFID();
-void handleRFIDScan();
+bool checkRFIDCard();
 void connectToWiFi();
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length);
 void initWebSocket();
 void sendGameUpdate(const char *action, int amount = 0);
 void handleButtonPresses();
 void updateMenuDisplay();
-bool checkRFIDCard();

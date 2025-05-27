@@ -24,19 +24,3 @@ bool checkRFIDCard()
     cardId.toUpperCase();
     return true;
 }
-
-void handleRFIDScan()
-{
-    if (checkRFIDCard())
-        return;
-
-    StaticJsonDocument<128> doc;
-    doc["event"] = isRegisteringPlayers ? "register_player" : "game_add_player";
-    doc["cardId"] = cardId;
-    String jsonStr;
-    serializeJson(doc, jsonStr);
-    webSocket.sendTXT(jsonStr);
-
-    cardScanned = true;
-    delay(1000);
-}
