@@ -1,5 +1,15 @@
 #include "config.h"
 
+enum ActionState
+{
+  WAITING_FOR_CARD,
+  SELECTING_ACTION,
+  CONFIRMING_ACTION
+};
+
+ActionState actionState = WAITING_FOR_CARD;
+String scannedCardForTurn = "";
+
 void setup()
 {
   Serial.begin(115200);
@@ -18,14 +28,48 @@ void setup()
 void loop()
 {
   webSocket.loop();
-  if (cardScanned && !isRegisteringPlayers && !actionTaken)
+  switch (actionState)
   {
-    handleButtonPresses();
-    updateMenuDisplay();
-  }
-  else if (!cardScanned)
-  {
-    handleRFIDScan();
+  case WAITING_FOR_CARD:
+    if (checkRFIDCard())
+    {
+      scannedCardForTurn = cardId;
+      cardScanned = true;
+      actionTaken = false;
+      actionState = SELECTING_ACTION;
+      showMessage("Card scanned", "Choose action");
+    }
+    break;
+
+  case SELECTING_ACTION:
+    if (!actionTaken)
+    {
+      handleButtonPresses();
+      updateMenuDisplay();
+      if (actionTaken)
+      {
+        showMessage("Confirm Action", "Scan again");
+        actionState = CONFIRMING_ACTION;
+      }
+    }
+    break;
+
+  case CONFIRMING_ACTION:
+    if (checkRFIDCard())
+    {
+      if (cardId == scannedCardForTurn)
+      {
+        showMessage("Action Confirmed", "Waiting...");
+        cardScanned = false;
+        actionTaken = false;
+        actionState = WAITING_FOR_CARD;
+      }
+      else
+      {
+        showMessage("Wrong card", "Scan again");
+      }
+    }
+    break;
   }
   delay(50);
 }

@@ -12,22 +12,23 @@ void setup()
   connectToWiFi();
   Serial.println("WiFi connected!");
   initWebSocket();
-  Serial.println("Websockets initialized");
+  showMessage("Register Mode", "Scan cards");
 }
 
 void loop()
 {
   webSocket.loop();
-  if (cardScanned && !isRegisteringPlayers && !actionTaken)
+  if (checkRFIDCard())
   {
-    handleButtonPresses();
-    updateMenuDisplay();
+    StaticJsonDocument<128> doc;
+    doc["event"] = "register_player";
+    doc["cardId"] = cardId;
+    String jsonStr;
+    serializeJson(doc, jsonStr);
+    webSocket.sendTXT(jsonStr);
+    showMessage("Card Registered", cardId);
+    delay(1500);
   }
-  else if (!cardScanned)
-  {
-    handleRFIDScan();
-  }
-  delay(50);
 }
 
 void connectToWiFi()

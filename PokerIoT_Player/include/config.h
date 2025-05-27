@@ -32,6 +32,7 @@ extern const uint16_t port;
 // Shared variables
 extern Adafruit_SH1106 display;
 extern WebSocketsClient webSocket;
+extern enum ActionState actionState;
 extern const char *menuItems[5];
 extern int currentSelection;
 extern bool inAmountMenu;
@@ -58,3 +59,4 @@ void initWebSocket();
 void sendGameUpdate(const char *action, int amount = 0);
 void handleButtonPresses();
 void updateMenuDisplay();
+bool checkRFIDCard();

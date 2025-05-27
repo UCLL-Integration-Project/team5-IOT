@@ -10,10 +10,11 @@ void initRFID()
     rfid.PCD_Init();
 }
 
-void handleRFIDScan()
+bool checkRFIDCard()
 {
     if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial())
-        return;
+        return false;
+
     cardId = "";
     for (byte i = 0; i < rfid.uid.size; i++)
     {
@@ -21,14 +22,5 @@ void handleRFIDScan()
         cardId += String(rfid.uid.uidByte[i], HEX);
     }
     cardId.toUpperCase();
-
-    StaticJsonDocument<128> doc;
-    doc["event"] = isRegisteringPlayers ? "register_player" : "game_add_player";
-    doc["cardId"] = cardId;
-    String jsonStr;
-    serializeJson(doc, jsonStr);
-    webSocket.sendTXT(jsonStr);
-
-    cardScanned = true;
-    delay(1000);
+    return true;
 }
