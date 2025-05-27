@@ -1,5 +1,7 @@
 # Poker IoT System - ESP32
 
+![alt text](image.png)
+
 ## Hardware Components
 
 - ESP32 Dev Board (Wi-Fi supported)
