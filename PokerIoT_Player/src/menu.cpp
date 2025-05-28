@@ -1,6 +1,6 @@
 #include "config.h"
 
-const char *menuItems[] = {"Check", "Bet", "Call", "Raise", "Fold"};
+const char *menuItems[] = {"check", "bet", "call", "raise", "fold"};
 int currentSelection = 0;
 bool inAmountMenu = false;
 int betValue = 0;
@@ -39,12 +39,12 @@ void handleButtonPresses()
                 showMessage("Insufficient Chips", "Lower your bet");
                 return;
             }
-            if (strcmp(selected, "Raise") == 0 && (betValue <= lastBet || (betValue - lastBet) < minRaise))
+            if (strcmp(selected, "raise") == 0 && (betValue <= lastBet || (betValue - lastBet) < minRaise))
             {
                 showMessage("Invalid Raise", "Must raise +10");
                 return;
             }
-            if (strcmp(selected, "Call") == 0 && betValue != lastBet)
+            if (strcmp(selected, "call") == 0 && betValue != lastBet)
             {
                 showMessage("Invalid Call", "Must match last bet");
                 return;
@@ -53,7 +53,7 @@ void handleButtonPresses()
             inAmountMenu = false;
             actionTaken = true;
         }
-        else if (strcmp(selected, "Check") == 0 || strcmp(selected, "Fold") == 0)
+        else if (strcmp(selected, "check") == 0 || strcmp(selected, "fold") == 0)
         {
             sendGameUpdate(selected, 0);
             actionTaken = true;
