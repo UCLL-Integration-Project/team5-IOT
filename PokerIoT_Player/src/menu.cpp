@@ -10,6 +10,10 @@ const int minRaise = 10;
 int lastBet = 0;
 int playerBalance = 9999;
 
+extern String selectedAction;
+extern int selectedAmount;
+extern bool actionPending;
+
 void handleButtonPresses()
 {
     if (digitalRead(BUTTON_UP) == LOW)
@@ -49,13 +53,17 @@ void handleButtonPresses()
                 showMessage("Invalid Call", "Must match last bet");
                 return;
             }
-            sendGameUpdate(selected, betValue);
+            selectedAction = selected;
+            selectedAmount = betValue;
             inAmountMenu = false;
+            actionPending = true;
             actionTaken = true;
         }
         else if (strcmp(selected, "check") == 0 || strcmp(selected, "fold") == 0)
         {
-            sendGameUpdate(selected, 0);
+            selectedAction = selected;
+            selectedAmount = 0;
+            actionPending = true;
             actionTaken = true;
         }
         else
@@ -81,9 +89,9 @@ void updateMenuDisplay()
     if (actionTaken)
     {
         display.setCursor(0, 0);
-        display.println("Action sent.");
+        display.println("Action pending...");
         display.setCursor(0, 12);
-        display.println("Wait for next round...");
+        display.println("Scan card to confirm");
     }
     else if (inAmountMenu)
     {

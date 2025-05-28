@@ -40,6 +40,9 @@ extern int betValue;
 extern const int minBet;
 extern const int betStep;
 extern const int minRaise;
+extern String selectedAction;
+extern int selectedAmount;
+extern bool actionPending;
 
 extern bool actionTaken;
 extern int lastBet;

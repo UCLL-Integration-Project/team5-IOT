@@ -10,6 +10,9 @@ enum ActionState
 ActionState actionState = WAITING_FOR_CARD;
 String scannedCardForTurn = "";
 bool playerAddedToGame = false;
+String selectedAction = "";
+int selectedAmount = 0;
+bool actionPending = false;
 
 void setup()
 {
@@ -79,6 +82,11 @@ void loop()
     {
       if (cardId == scannedCardForTurn)
       {
+        if (actionPending)
+        {
+          sendGameUpdate(selectedAction.c_str(), selectedAmount);
+          actionPending = false;
+        }
         showMessage("Action Confirmed", "Waiting...");
         cardScanned = false;
         actionTaken = false;

@@ -1,5 +1,9 @@
 #include "config.h"
 
+String lastCardId = "";
+unsigned long lastScanTime = 0;
+const unsigned long scanCooldown = 3000;
+
 void setup()
 {
   Serial.begin(115200);
@@ -17,16 +21,35 @@ void setup()
 void loop()
 {
   webSocket.loop();
-  if (checkRFIDCard())
+
+  if (millis() - lastScanTime > scanCooldown && checkRFIDCard())
   {
-    StaticJsonDocument<128> doc;
-    doc["event"] = "register_player";
-    doc["cardId"] = cardId;
-    String jsonStr;
-    serializeJson(doc, jsonStr);
-    webSocket.sendTXT(jsonStr);
-    showMessage("Card Registered", cardId);
-    delay(1500);
+    if (cardId != lastCardId)
+    {
+      lastCardId = cardId;
+      lastScanTime = millis();
+
+      if (webSocket.isConnected())
+      {
+        StaticJsonDocument<128> doc;
+        doc["event"] = "register_player";
+        doc["cardId"] = cardId;
+        String jsonStr;
+        serializeJson(doc, jsonStr);
+        webSocket.sendTXT(jsonStr);
+        showMessage("Card Registered", cardId);
+        Serial.println("[WS] Sent: " + jsonStr);
+      }
+      else
+      {
+        showMessage("WS Not Connected", "Try again later");
+        Serial.println("[WS ERROR] Not connected");
+      }
+    }
+    else
+    {
+      Serial.println("[INFO] Duplicate card scan ignored.");
+    }
   }
 }
 
