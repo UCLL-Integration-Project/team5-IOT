@@ -23,11 +23,9 @@ bool checkRFIDCard()
     }
     cardId.toUpperCase();
 
-    // Wait for card removal before allowing next scan
-    while (rfid.PICC_IsNewCardPresent())
-    {
-        delay(50);
-    }
+    // Properly end communication with the card
+    rfid.PICC_HaltA();
+    rfid.PCD_StopCrypto1();
 
     return true;
 }
