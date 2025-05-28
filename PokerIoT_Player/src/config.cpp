@@ -1,9 +1,9 @@
 #include "config.h"
 #include "stdint.h"
 
-const char *ssid = "VICTUS-LIMBU 2508";
-const char *password = "6p{02U95";
-const char *host = "10.25.251.105";
+const char *ssid = "Jeffspot";
+const char *password = "12345678";
+const char *host = "192.168.205.26";
 const char *path = "/?type=esp32";
 const uint16_t port = 3000;
 
