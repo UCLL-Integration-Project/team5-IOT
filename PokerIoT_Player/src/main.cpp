@@ -9,6 +9,7 @@ enum ActionState
 
 ActionState actionState = WAITING_FOR_CARD;
 String scannedCardForTurn = "";
+bool playerAddedToGame = false;
 
 void setup()
 {
@@ -23,11 +24,13 @@ void setup()
   Serial.println("WiFi connected!");
   initWebSocket();
   Serial.println("Websockets initialized");
+  showMessage("Ready", "Scan card");
 }
 
 void loop()
 {
   webSocket.loop();
+
   switch (actionState)
   {
   case WAITING_FOR_CARD:
@@ -36,8 +39,25 @@ void loop()
       scannedCardForTurn = cardId;
       cardScanned = true;
       actionTaken = false;
+
+      // Send game_add_player event once
+      if (!playerAddedToGame)
+      {
+        StaticJsonDocument<128> doc;
+        doc["event"] = "game_add_player";
+        doc["cardId"] = cardId;
+        String jsonStr;
+        serializeJson(doc, jsonStr);
+        webSocket.sendTXT(jsonStr);
+        playerAddedToGame = true;
+        showMessage("Added to game", cardId);
+      }
+      else
+      {
+        showMessage("Card scanned", "Choose action");
+      }
+
       actionState = SELECTING_ACTION;
-      showMessage("Card scanned", "Choose action");
     }
     break;
 
@@ -71,6 +91,7 @@ void loop()
     }
     break;
   }
+
   delay(50);
 }
 

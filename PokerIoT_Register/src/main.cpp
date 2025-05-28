@@ -3,8 +3,7 @@
 void setup()
 {
   Serial.begin(115200);
-  initButtons();
-  Serial.println("Buttons init done");
+
   initDisplay();
   Serial.println("Display init done.");
   initRFID();

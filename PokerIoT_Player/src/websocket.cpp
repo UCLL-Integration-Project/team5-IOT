@@ -9,7 +9,15 @@ extern int playerBalance;
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
 {
-    if (type != WStype_TEXT)
+    if (type == WStype_CONNECTED)
+    {
+        Serial.println("[WS] Connected to backend.");
+    }
+    else if (type == WStype_DISCONNECTED)
+    {
+        Serial.println("[WS] Disconnected from backend.");
+    }
+    else if (type != WStype_TEXT)
         return;
 
     Serial.print("[WS] Raw message: ");
