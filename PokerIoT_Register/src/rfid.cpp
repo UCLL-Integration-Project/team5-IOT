@@ -22,5 +22,12 @@ bool checkRFIDCard()
         cardId += String(rfid.uid.uidByte[i], HEX);
     }
     cardId.toUpperCase();
+
+    // Wait for card removal before allowing next scan
+    while (rfid.PICC_IsNewCardPresent())
+    {
+        delay(50);
+    }
+
     return true;
 }

@@ -45,6 +45,7 @@ extern bool actionTaken;
 extern int lastBet;
 extern int playerBalance;
 extern bool cardScanned;
+extern int playerPosition;
 extern String cardId;
 
 // Function declarations

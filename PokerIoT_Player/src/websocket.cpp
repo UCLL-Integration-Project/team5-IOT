@@ -6,6 +6,7 @@ extern bool cardScanned;
 extern bool actionTaken;
 extern int lastBet;
 extern int playerBalance;
+int playerPosition = -1;
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
 {
@@ -38,7 +39,17 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length)
     else if (strcmp(eventType, "game_add_player_ack") == 0)
     {
         int pos = doc["position"];
-        showMessage("Joined Game", String("Position: ") + pos);
+        lastBet = doc["last_bet"];
+
+        if (pos == playerPosition)
+        {
+            cardScanned = false;
+            showMessage("Your Turn!", "Scan to play");
+        }
+        else
+        {
+            showMessage("Waiting", "Player " + String(pos));
+        }
     }
     else if (strcmp(eventType, "game_start") == 0)
     {
