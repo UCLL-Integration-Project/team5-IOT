@@ -27,6 +27,10 @@ extern WebSocketsClient webSocket;
 extern bool cardScanned;
 extern String cardId;
 
+extern String lastCardId;
+extern unsigned long lastScanTime;
+extern const unsigned long scanCooldown;
+
 // Function declarations
 void initDisplay();
 void showMessage(const String &line1, const String &line2);
