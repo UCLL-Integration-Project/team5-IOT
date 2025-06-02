@@ -9,7 +9,7 @@
 
 const char *ssid = "VICTUS-LIMBU 2508";
 const char *password = "6p{02U95";
-const char *host = "10.25.238.117";
+const char *host = "10.25.236.158";
 const char *path = "/?type=esp32";
 const uint16_t port = 3000;
 
